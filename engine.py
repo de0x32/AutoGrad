@@ -32,7 +32,16 @@ class Value:
     def __pow__(self, other):
         assert isinstance(other, (int, float)), "only supporting int/float powers for now"
         out = Value(self.data ** other, (self,), f'**{other}')
+    def exp(self):
+        x = self.data
+        out = Value(2.718281828459045 ** x, (self,), 'exp')
 
+        def _backward():
+            self.grad += out.data * out.grad
+        out._backward = _backward
+
+        return out
+      
         def _backward():
             self.grad += other * (self.data ** (other - 1)) * out.grad
         out._backward = _backward
