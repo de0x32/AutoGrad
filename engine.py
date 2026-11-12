@@ -35,7 +35,16 @@ class Value:
     def exp(self):
         x = self.data
         out = Value(2.718281828459045 ** x, (self,), 'exp')
+    def tanh(self):
+        x = self.data
+        t = (2.718281828459045**(2*x) - 1) / (2.718281828459045**(2*x) + 1)
+        out = Value(t, (self,), 'tanh')
 
+        def _backward():
+            self.grad += (1.0 - t**2) * out.grad
+        out._backward = _backward
+
+        return out
         def _backward():
             self.grad += out.data * out.grad
         out._backward = _backward
