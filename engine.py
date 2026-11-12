@@ -1,4 +1,5 @@
 import random
+import math
 from typing import List, Union, Callable
 
 class Value:
