@@ -1,7 +1,34 @@
 import random
 import math
+import matplotlib.pyplot as plt
 from engine import Value
 from tensor_nn import Tensor, MLP, Adam, StandardScaler, load_dataset_from_csv
+
+def plot_predicted_vs_actual(preds, targets):
+    p_vals = [p.data if hasattr(p, 'data') else p for p in preds]
+    t_vals = [t.data if hasattr(t, 'data') else t for t in targets]
+    
+    plt.figure(figsize=(7, 7))
+    
+    plt.scatter(t_vals, p_vals, color='royalblue', edgecolor='k', alpha=0.7, s=70, label='Predictions')
+    
+    min_val = min(min(t_vals), min(p_vals)) - 0.5
+    max_val = max(max(t_vals), max(p_vals)) + 0.5
+    
+    plt.plot([min_val, max_val], [min_val, max_val], color='crimson', linestyle='--', linewidth=2, label='Ideal ($y = x$)')
+    
+    plt.xlim(min_val, max_val)
+    plt.ylim(min_val, max_val)
+    plt.xlabel('Actual Values ($y$)', fontsize=12)
+    plt.ylabel('Predicted Values ($\hat{y}$)', fontsize=12)
+    plt.title('Predicted vs. Actual Values (Regression Performance)', fontsize=14, fontweight='bold')
+    plt.legend(loc='upper left', fontsize=11)
+    plt.grid(True, linestyle=':', alpha=0.6)
+    
+    plt.gca().set_aspect('equal', adjustable='box')
+    
+    plt.tight_layout()
+    plt.show()
 
 def calculate_metrics(preds, targets):
     p_vals = [p.data if hasattr(p, 'data') else p for p in preds]
@@ -18,7 +45,6 @@ def calculate_metrics(preds, targets):
     return mae, r2
 
 def main():
-    # 1. Load Data from CSV (or fallback to synthetic generator if file missing)
     try:
         X_full, Y_full = load_dataset_from_csv("dataset.csv", has_header=True)
         print(f"Successfully loaded dataset from CSV. Total samples: {X_full.shape[0]}")
@@ -35,7 +61,6 @@ def main():
 
     num_samples = X_full.shape[0]
 
-    # 2. Train/Validation Split
     indices = list(range(num_samples))
     random.shuffle(indices)
     split_idx = int(0.8 * num_samples)
@@ -45,12 +70,10 @@ def main():
     X_val = X_full[indices[split_idx:]]
     Y_val = Y_full[indices[split_idx:]]
 
-    # 3. Feature Standardization (Fit on train, transform train & val)
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_val = scaler.transform(X_val)
 
-    # 4. Initialize Model, Optimizer, and Summary
     in_features = X_train.shape[1]
     model = MLP(nin=in_features, nouts=[16, 8, 1], activations=['tanh', 'tanh', 'linear'], dropout_p=0.0, use_bn=True)
     model.summary(input_shape=(32, in_features))
@@ -58,7 +81,6 @@ def main():
     initial_lr = 0.03
     optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
 
-    # 5. Training Loop Hyperparameters
     epochs = 200
     batch_size = 16
     decay_rate = 0.98
@@ -70,11 +92,9 @@ def main():
 
     print("\n--- Starting Training Pipeline ---")
     for epoch in range(epochs):
-        # LR Decay
         current_lr = initial_lr * (decay_rate ** epoch)
         optimizer.lr = current_lr
 
-        # Training Phase
         model.train()
         model.zero_grad()
         train_idxs = list(range(X_train.shape[0]))
@@ -98,14 +118,12 @@ def main():
 
         avg_train_loss = train_loss_total / num_batches
 
-        # Validation Phase
         model.eval()
         val_preds = model(X_val)
         val_diff = val_preds - Y_val
         val_error = sum([(val_diff[i][0] * val_diff[i][0]) for i in range(val_diff.rows)], Value(0.0))
         val_loss = (val_error * (1.0 / val_diff.rows)).data
 
-        # Early Stopping Check
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_weights = model.state_dict()
@@ -120,7 +138,6 @@ def main():
             print(f"\nEarly stopping triggered at epoch {epoch+1}!")
             break
 
-    # Restore Best Weights & Evaluate Metrics
     if best_weights is not None:
         model.load_state_dict(best_weights)
         print(f"\nRestored best model with Validation Loss: {best_val_loss:.6f}")
@@ -134,7 +151,8 @@ def main():
     print(f"Validation MAE: {mae:.4f}")
     print(f"Validation R²:  {r2:.4f}")
 
-    # Save Checkpoint
+    plot_predicted_vs_actual(preds_list, targets_list)
+
     model.save("best_mlp_model.json")
 
 if __name__ == "__main__":
