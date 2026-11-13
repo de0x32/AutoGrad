@@ -1,4 +1,4 @@
-from engine import MLP, SGD, Value
+from engine import MLP, Adam, Value
 
 def main():
     xs = [
@@ -10,7 +10,7 @@ def main():
     ys = [1.0, -1.0, -1.0, 1.0]
 
     model = MLP(nin=3, nouts=[4, 4, 1], activations=['tanh', 'tanh', 'linear'])
-    optimizer = SGD(model.parameters(), lr=0.05)
+    optimizer = Adam(model.parameters(), lr=0.05)
 
     epochs = 35
 
@@ -24,6 +24,7 @@ def main():
         if (epoch + 1) % 5 == 0 or epoch == 0:
             print(f"Epoch {epoch+1:02d}/{epochs} | Loss: {loss.data:.6f}")
 
+    print("\nFinal Predictions:")
     for x, y in zip(xs, ys):
         pred = model(x)
         print(f"Input: {x} | Target: {y:4.1f} | Prediction: {pred.data:6.4f}")
