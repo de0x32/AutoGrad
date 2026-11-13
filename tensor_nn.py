@@ -1,4 +1,5 @@
 import random
+import csv
 from engine import Value, Module
 
 class Tensor:
@@ -35,7 +36,7 @@ class Tensor:
 
     def __add__(self, other):
         if isinstance(other, Tensor):
-            assert self.shape == other.shape, f"Shape mismatch for addition: {self.shape} vs {other.shape}"
+            assert self.shape == other.shape
             res = [[self.data[i][j] + other.data[i][j] for j in range(self.cols)] for i in range(self.rows)]
         else:
             res = [[self.data[i][j] + other for j in range(self.cols)] for i in range(self.rows)]
@@ -85,16 +86,13 @@ class Tensor:
 
 class Linear(Module):
     def __init__(self, nin: int, nout: int):
-        # Xavier / Glorot initialization
         scale = (2.0 / nin) ** 0.5
         w_data = [[random.uniform(-scale, scale) for _ in range(nout)] for _ in range(nin)]
         b_data = [[0.0 for _ in range(nout)]]
-        
         self.W = Tensor(w_data)
         self.b = Tensor(b_data)
 
     def __call__(self, x: Tensor) -> Tensor:
-        # (X @ W) + b
         return (x @ self.W) + self.b
 
     def parameters(self) -> list:
@@ -263,3 +261,51 @@ class Adam:
             v_corrected = v_buf / (1 - self.beta2 ** self.t)
 
             p.data -= self.lr * m_corrected / (v_corrected ** 0.5 + self.eps)
+
+
+class StandardScaler:
+    def __init__(self):
+        self.means = []
+        self.stds = []
+
+    def fit(self, X: Tensor):
+        rows, cols = X.shape
+        self.means = []
+        self.stds = []
+        for j in range(cols):
+            col_vals = [X.data[i][j] for i in range(rows)]
+            mean = sum(col_vals) / rows
+            self.means.append(mean)
+            variance = sum((val - mean) ** 2 for val in col_vals) / rows
+            std = variance ** 0.5
+            self.stds.append(std if std > 1e-8 else 1.0)
+
+    def transform(self, X: Tensor) -> Tensor:
+        rows, cols = X.shape
+        scaled_data = []
+        for i in range(rows):
+            row = []
+            for j in range(cols):
+                row.append((X.data[i][j] - self.means[j]) / self.stds[j])
+            scaled_data.append(row)
+        return Tensor(scaled_data)
+
+    def fit_transform(self, X: Tensor) -> Tensor:
+        self.fit(X)
+        return self.transform(X)
+
+
+def load_dataset_from_csv(filepath: str, has_header: bool = True):
+    X_data, Y_data = [], []
+    with open(filepath, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        if has_header:
+            header = next(reader)
+            print(f"Loaded CSV columns: {header}")
+        for row in reader:
+            if not row:
+                continue
+            numeric_row = [float(val) for val in row]
+            X_data.append(numeric_row[:-1])
+            Y_data.append([numeric_row[-1]])
+    return Tensor(X_data), Tensor(Y_data)
