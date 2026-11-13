@@ -270,14 +270,20 @@ class StandardScaler:
 
     def fit(self, X: Tensor):
         rows, cols = X.shape
+        if rows == 0 or cols == 0:
+            raise ValueError("StandardScaler requires a non-empty 2D tensor.")
+
         self.means = []
         self.stds = []
+
         for j in range(cols):
-            col_vals = [X.data[i][j] for i in range(rows)]
+            # Standardization statistics are plain numbers, not autograd Values.
+            col_vals = [X.data[i][j].data for i in range(rows)]
             mean = sum(col_vals) / rows
-            self.means.append(mean)
             variance = sum((val - mean) ** 2 for val in col_vals) / rows
             std = variance ** 0.5
+
+            self.means.append(mean)
             self.stds.append(std if std > 1e-8 else 1.0)
 
     def transform(self, X: Tensor) -> Tensor:
