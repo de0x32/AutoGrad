@@ -1,17 +1,7 @@
 import random
 import math
 from engine import Value
-from tensor_nn import Tensor, MLP, Adam
-
-def generate_dataset(num_samples=150):
-    X_data, Y_data = [], []
-    for _ in range(num_samples):
-        x1 = random.uniform(-2.0, 2.0)
-        x2 = random.uniform(-2.0, 2.0)
-        y = math.sin(x1) + math.cos(x2)
-        X_data.append([x1, x2])
-        Y_data.append([y])
-    return Tensor(X_data), Tensor(Y_data)
+from tensor_nn import Tensor, MLP, Adam, StandardScaler, load_dataset_from_csv
 
 def calculate_metrics(preds, targets):
     p_vals = [p.data if hasattr(p, 'data') else p for p in preds]
@@ -28,21 +18,47 @@ def calculate_metrics(preds, targets):
     return mae, r2
 
 def main():
-    X_full, Y_full = generate_dataset(150)
+    # 1. Load Data from CSV (or fallback to synthetic generator if file missing)
+    try:
+        X_full, Y_full = load_dataset_from_csv("dataset.csv", has_header=True)
+        print(f"Successfully loaded dataset from CSV. Total samples: {X_full.shape[0]}")
+    except FileNotFoundError:
+        print("dataset.csv not found. Generating synthetic dataset for demonstration...")
+        X_data, Y_data = [], []
+        for _ in range(150):
+            x1 = random.uniform(-2.0, 2.0)
+            x2 = random.uniform(-2.0, 2.0)
+            y = math.sin(x1) + math.cos(x2)
+            X_data.append([x1, x2])
+            Y_data.append([y])
+        X_full, Y_full = Tensor(X_data), Tensor(Y_data)
+
     num_samples = X_full.shape[0]
 
+    # 2. Train/Validation Split
     indices = list(range(num_samples))
     random.shuffle(indices)
     split_idx = int(0.8 * num_samples)
 
-    X_train, Y_train = X_full[indices[:split_idx]], Y_full[indices[:split_idx]]
-    X_val, Y_val = X_full[indices[split_idx:]], Y_full[indices[split_idx:]]
+    X_train = X_full[indices[:split_idx]]
+    Y_train = Y_full[indices[:split_idx]]
+    X_val = X_full[indices[split_idx:]]
+    Y_val = Y_full[indices[split_idx:]]
 
-    model = MLP(nin=2, nouts=[16, 8, 1], activations=['tanh', 'tanh', 'linear'], dropout_p=0.0, use_bn=True)
-    model.summary(input_shape=(32, 2))
+    # 3. Feature Standardization (Fit on train, transform train & val)
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
+
+    # 4. Initialize Model, Optimizer, and Summary
+    in_features = X_train.shape[1]
+    model = MLP(nin=in_features, nouts=[16, 8, 1], activations=['tanh', 'tanh', 'linear'], dropout_p=0.0, use_bn=True)
+    model.summary(input_shape=(32, in_features))
 
     initial_lr = 0.03
     optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
+
+    # 5. Training Loop Hyperparameters
     epochs = 200
     batch_size = 16
     decay_rate = 0.98
@@ -52,11 +68,13 @@ def main():
     best_weights = None
     patience_counter = 0
 
-    print("\n--- Starting Training ---")
+    print("\n--- Starting Training Pipeline ---")
     for epoch in range(epochs):
+        # LR Decay
         current_lr = initial_lr * (decay_rate ** epoch)
         optimizer.lr = current_lr
 
+        # Training Phase
         model.train()
         model.zero_grad()
         train_idxs = list(range(X_train.shape[0]))
@@ -80,12 +98,14 @@ def main():
 
         avg_train_loss = train_loss_total / num_batches
 
+        # Validation Phase
         model.eval()
         val_preds = model(X_val)
         val_diff = val_preds - Y_val
         val_error = sum([(val_diff[i][0] * val_diff[i][0]) for i in range(val_diff.rows)], Value(0.0))
         val_loss = (val_error * (1.0 / val_diff.rows)).data
 
+        # Early Stopping Check
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_weights = model.state_dict()
@@ -100,6 +120,7 @@ def main():
             print(f"\nEarly stopping triggered at epoch {epoch+1}!")
             break
 
+    # Restore Best Weights & Evaluate Metrics
     if best_weights is not None:
         model.load_state_dict(best_weights)
         print(f"\nRestored best model with Validation Loss: {best_val_loss:.6f}")
@@ -113,6 +134,7 @@ def main():
     print(f"Validation MAE: {mae:.4f}")
     print(f"Validation R²:  {r2:.4f}")
 
+    # Save Checkpoint
     model.save("best_mlp_model.json")
 
 if __name__ == "__main__":
