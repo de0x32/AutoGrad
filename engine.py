@@ -199,3 +199,25 @@ class SGD:
     def step(self) -> None:
         for p in self.parameters:
             p.data -= self.lr * p.grad
+
+class Adam:
+    def __init__(self, parameters: List[Value], lr: float = 0.001, betas: tuple = (0.9, 0.999), eps: float = 1e-8):
+        self.parameters = parameters
+        self.lr = lr
+        self.beta1, self.beta2 = betas
+        self.eps = eps
+        self.m = {p: 0.0 for p in self.parameters}
+        self.v = {p: 0.0 for p in self.parameters}
+        def_t = 0
+        self.t = 0
+
+    def step(self) -> None:
+        self.t += 1
+        for p in self.parameters:
+            self.m[p] = self.beta1 * self.m[p] + (1 - self.beta1) * p.grad
+            self.v[p] = self.beta2 * self.v[p] + (1 - self.beta2) * (p.grad ** 2)
+            
+            m_hat = self.m[p] / (1 - self.beta1 ** self.t)
+            v_hat = self.v[p] / (1 - self.beta2 ** self.t)
+            
+            p.data -= self.lr * m_hat / ((v_hat ** 0.5) + self.eps)
