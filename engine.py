@@ -2,6 +2,7 @@ import math
 import json
 
 class Value:
+    """Stores a scalar value and its gradient for backpropagation."""
     def __init__(self, data, _children=(), _op='', label=''):
         self.data = float(data)
         self.grad = 0.0
@@ -31,7 +32,7 @@ class Value:
         return out
 
     def __pow__(self, other):
-        assert isinstance(other, (int, float)),
+        assert isinstance(other, (int, float)), "only supporting int/float powers for now"
         out = Value(self.data ** other, (self,), f'**{other}')
         
         def _backward():
@@ -110,6 +111,7 @@ class Value:
 
 
 class Module:
+    """Base class for all neural network modules."""
     def zero_grad(self):
         for p in self.parameters():
             p.grad = 0.0
